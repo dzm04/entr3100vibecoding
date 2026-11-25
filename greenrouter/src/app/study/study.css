@@ -4,6 +4,7 @@
   --study-border: #35473a;
   --study-muted: #b1c0b5;
   --study-accent: #a4f4a9;
+  font-size: 15px;
   display: grid;
   grid-template-columns: 224px minmax(0, 1fr);
   height: 100dvh;
@@ -26,7 +27,7 @@
   font-weight: 700;
 }
 
-.study-brand { margin: 0 0 12px; }
+.study-brand { margin: 0 0 12px; font-size: 19px; }
 .study-brand span {
   display: inline-grid;
   place-items: center;
@@ -65,7 +66,7 @@
 
 .study-welcome { display: grid; align-items: center; }
 .study-intro h1 {
-  font-size: clamp(2rem, 4.3vw, 3rem);
+  font-size: clamp(29px, 4.3vw, 46px);
   line-height: 1.08;
   letter-spacing: -.045em;
 }
@@ -91,7 +92,7 @@
 .study-message p { color: inherit; white-space: pre-wrap; }
 .study-label {
   font-size: .71rem;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: .09em;
   text-transform: uppercase;
   color: var(--study-accent);
@@ -180,4 +181,32 @@
   .study-main { padding-bottom: 10px; }
   .study-thread { padding-top: 16px; }
   .study-card, .study-dialog { padding: 14px; }
+}
+
+.study-recommendation h2 { font-size: 21px; line-height: 1.25; }
+.study-recommendation p { font-size: 14px; }
+.study-answer h2 { font-size: 15px; }
+.study-chat-link { font-weight: 400; }
+
+.study-composer select {
+  appearance: none;
+  padding: 8px 32px 8px 12px;
+  border: 1px solid var(--study-border);
+  background: #213026;
+  color: #eff6f0;
+  font-weight: 700;
+}
+
+.study-goal-control { position: relative; }
+.study-goal-control::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 4px);
+  right: 13px;
+  width: 6px;
+  height: 6px;
+  border: solid currentColor;
+  border-width: 0 1px 1px 0;
+  transform: rotate(45deg);
+  pointer-events: none;
 }

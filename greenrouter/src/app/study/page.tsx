@@ -223,9 +223,9 @@ export default function Study() {
           onChange={(event) => setPrompt(event.target.value)} />
         <div className="study-actions study-composer-controls">
           <label htmlFor="study-goal" className="study-sr-only">Study goal</label>
-          <select id="study-goal" value={goal} onChange={(event) => setGoal(event.target.value as Goal)}>
+          <div className="study-goal-control"><select id="study-goal" value={goal} onChange={(event) => setGoal(event.target.value as Goal)}>
             {Object.entries(goals).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
+          </select></div>
           <button type="submit" disabled={!!pending || !prompt.trim()}>Send ↑</button>
         </div>
       </form>
