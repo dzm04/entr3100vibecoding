@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
+import { studyModelIds, studyModels } from '../../../lib/study-models';
+import { routeStudyTask } from '../../../lib/ai-router';
 import { query } from '../../../lib/db';
 
 export const runtime = 'nodejs';
@@ -27,14 +29,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Send a valid JSON body.' }, { status: 400 });
   }
   const activity = body?.activity;
-  const difficulty = body?.difficulty;
+  const prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : '';
+  if (prompt.length > 8000) return NextResponse.json({ error: 'Keep your task under 8,000 characters.' }, { status: 400 });
   if (activity !== 'concept' && activity !== 'writing') {
     return NextResponse.json({ error: 'Choose concept or writing.' }, { status: 400 });
   }
+  const routing = body?.difficulty === undefined && prompt ? await routeStudyTask(prompt, activity) : null;
+  const difficulty = routing?.difficulty ?? body?.difficulty;
   if (difficulty === undefined) {
     return NextResponse.json({
       status: 'needs_clarification',
       question: activities[activity],
+      routerUnavailable: Boolean(prompt),
       choices: [{ label: 'No', difficulty: 'basic' }, { label: 'Yes', difficulty: 'advanced' }],
     });
   }
@@ -43,7 +49,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const candidates = await query<Candidate>(`
+    const rows = await query<Candidate>(`
       SELECT m.id, m.display_name, b.id::text AS benchmark_id, b.score::float8 AS score,
              b.sample_count, b.rubric_version
       FROM models m
@@ -52,14 +58,19 @@ export async function POST(request: NextRequest) {
         WHERE model_id = m.id AND activity = $1 AND difficulty = $2
         ORDER BY evaluated_at DESC, id DESC LIMIT 1
       ) b ON true
-      WHERE m.active
+      WHERE m.active AND m.id = ANY($3::text[])
       ORDER BY m.capability_rank, m.id
-    `, [activity, difficulty]);
+    `, [activity, difficulty, studyModelIds]);
+
+    const names = new Map(Object.values(studyModels).map(({ id, display_name }) => [id, display_name]));
+    const candidates = rows.map((model) => ({ ...model, display_name: names.get(model.id) ?? model.display_name }));
 
     const missing = candidates.some((model) => model.score === null);
-    const selected = missing ? undefined : candidates.find((model) => model.score! >= threshold);
+    const selected = routing
+      ? candidates.find((model) => model.id === routing.id)
+      : missing ? undefined : candidates.find((model) => model.score! >= threshold);
     const reason = selected
-      ? `${selected.display_name} is the lowest-ranked by required capability among the qualifying models. It scored ${selected.score}/100 on ${selected.sample_count} benchmark tasks for this category and level.`
+      ? routing?.reason ?? `${selected.display_name} is the lowest-ranked by required capability among the qualifying models. It scored ${selected.score}/100 on ${selected.sample_count} benchmark tasks for this category and level.`
       : !candidates.length ? 'No models are active.'
       : missing ? 'Benchmark evidence is missing. Choose an available model manually.'
       : 'No model reached the quality threshold. Choose an available model manually.';
@@ -82,6 +93,7 @@ export async function POST(request: NextRequest) {
       recommendation_id: id,
       model: selected ?? null,
       reason,
+      source: routing && selected ? 'ai' : 'benchmark',
       candidates,
       threshold,
       water: { status: 'unavailable_for_serving_provider' },

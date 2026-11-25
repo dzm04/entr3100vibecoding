@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { createAuthClient } from 'better-auth/react';
+import { studyModels } from '../../lib/study-models';
 import './study.css';
 
 const authClient = createAuthClient();
@@ -18,6 +19,8 @@ type Recommendation = {
   candidates?: Model[];
   reason?: string;
   threshold?: number;
+  source?: 'ai' | 'benchmark';
+  routerUnavailable?: boolean;
 };
 type Answer = { model: string; text: string };
 type Turn = {
@@ -31,8 +34,8 @@ type Turn = {
 };
 type Chat = { id: string; turns: Turn[] };
 
-const qwen = { id: 'qwen/qwen3.5-9b', display_name: 'Qwen3.5-9B', score: null };
-const gemma = { id: 'google/gemma-4-31b-it:free', display_name: 'Gemma 4 31B', score: null };
+const qwen = { ...studyModels.qwen, score: null };
+const gemini = { ...studyModels.gemini, score: null };
 const example: Turn = {
   id: 'example',
   prompt: 'Explain recursion with one worked example.',
@@ -40,7 +43,7 @@ const example: Turn = {
   sample: true,
   recommendation: {
     model: qwen,
-    candidates: [qwen, gemma],
+    candidates: [qwen, gemini],
     reason: 'This task asks for a short definition and one worked example. A lightweight model is a candidate because the answer only needs to trace a few steps.',
   },
   answers: [{
@@ -162,7 +165,7 @@ export default function Study({ signedIn }: { signedIn: boolean }) {
 
   function recommend(chatId: string, turn: Turn, difficulty?: Difficulty) {
     return withRequest(chatId, turn, 'Finding a model…', async () => {
-      const recommendation = await post<Recommendation>('/api/recommend', { activity: turn.goal, difficulty });
+      const recommendation = await post<Recommendation>('/api/recommend', { activity: turn.goal, difficulty, prompt: turn.prompt });
       updateTurn(chatId, turn.id, (current) => ({ ...current, recommendation }));
       if (recommendation.model && recommendation.recommendation_id) {
         await run(chatId, turn, recommendation.model, recommendation.recommendation_id);
@@ -203,10 +206,11 @@ export default function Study({ signedIn }: { signedIn: boolean }) {
     <aside className="study-sidebar">
       <Link className="study-brand" href="/"><span aria-hidden="true">↗</span> GreenRouter</Link>
       <button className="study-secondary" type="button" onClick={() => selectChat(null)} disabled={!!pending}>+ New chat</button>
+      <button className="study-secondary" type="button" onClick={showExample} disabled={!!pending}>Offline demo</button>
       <p className="study-label">{signedIn ? 'Saved chats' : 'Chats this session'}</p>
       {chats.map((chat) => <button key={chat.id} className="study-chat-link" type="button"
         aria-current={active === chat.id ? 'true' : undefined} onClick={() => selectChat(chat.id)} disabled={!!pending}>
-        {chat.id === 'example' ? 'Recursion example' : chat.turns[0].prompt}
+        {chat.id === 'example' ? 'Offline demo · Recursion' : chat.turns[0].prompt}
       </button>)}
     </aside>
 
@@ -216,7 +220,7 @@ export default function Study({ signedIn }: { signedIn: boolean }) {
         {turns.length === 0 && <div className="study-intro">
           <h1>What are you studying?</h1>
           <p>Choose a study goal and ask a question. GreenRouter will look for a model that fits.</p>
-          <button type="button" className="study-secondary" onClick={showExample}>View a worked example</button>
+          <button type="button" className="study-secondary" onClick={showExample}>Open offline demo</button>
         </div>}
         {turns.map((turn) => {
           const rec = turn.recommendation;
@@ -224,7 +228,9 @@ export default function Study({ signedIn }: { signedIn: boolean }) {
           return <section className="study-turn" key={turn.id} aria-label={goals[turn.goal]}>
             <div className="study-message"><span className="study-label">{goals[turn.goal]}</span><p>{turn.prompt}</p></div>
             {rec?.question && <div className="study-card">
-              <h2>One detail about your task</h2><p>{rec.question}</p>
+              <h2>One detail about your task</h2>
+              {rec.routerUnavailable && <p>Automatic routing is unavailable. Answer this question to continue, or open the offline demo.</p>}
+              <p>{rec.question}</p>
               <div className="study-actions">
                 <button type="button" className="study-secondary" disabled={!!pending} onClick={() => void recommend(active!, turn, 'basic')}>No</button>
                 <button type="button" className="study-secondary" disabled={!!pending} onClick={() => void recommend(active!, turn, 'advanced')}>Yes</button>
@@ -234,6 +240,7 @@ export default function Study({ signedIn }: { signedIn: boolean }) {
               <span className="study-label">{turn.sample ? 'Model recommendation · Example' : 'Model recommendation'}</span>
               <h2>{rec.model?.display_name ?? 'Choose a model'}</h2>
               <p>{rec.reason}</p>
+              {rec.source === 'ai' && <p className="study-label">AI routing judgment</p>}
               <div className="study-actions">
                 <button type="button" onClick={() => showDetails(turn)}>{rec.model ? 'Why this model?' : 'View model evidence'}</button>
               </div>
@@ -250,10 +257,11 @@ export default function Study({ signedIn }: { signedIn: boolean }) {
             {pending?.turn === turn.id && <p role="status">{pending.label}</p>}
             {turn.error && <div className="study-error" role="alert">
               <p>{turn.error}</p>
+              <button type="button" className="study-secondary" disabled={!!pending} onClick={showExample}>Open offline demo</button>
               {!recommendationId && <button type="button" className="study-secondary" disabled={!!pending} onClick={() => void recommend(active!, turn)}>Retry recommendation</button>}
             </div>}
             {turn.answers.map((answer, index) => <article className="study-answer" key={index}>
-              <h2>{turn.sample ? 'Example answer' : 'Answer'} from {answer.model}</h2><p className="answer">{answer.text}</p>
+              <h2>{turn.sample ? 'Offline example for' : 'Answer from'} {answer.model}</h2><p className="answer">{answer.text}</p>
             </article>)}
             {turn.answers.length > 0 && <div className="study-card study-water">
               <span className="study-label">On-site cooling water</span>
@@ -288,7 +296,12 @@ export default function Study({ signedIn }: { signedIn: boolean }) {
       {details && <><span className="study-label">{details.sample ? 'Routing example' : 'Model evidence'} · {goals[details.goal]}</span>
         <h2 id="study-dialog-title">{details.recommendation?.model ? `Why ${details.recommendation.model.display_name}?` : 'Why manual selection?'}</h2>
         <p>{details.recommendation?.reason}</p>
-        {details.recommendation?.threshold !== undefined && <p>Quality threshold · {details.recommendation.threshold}/100</p>}
+        {details.recommendation?.source === 'ai' && <p>A separate routing model judged the task. The chosen model generates the study answer.</p>}
+        <p>{details.recommendation?.model?.id === studyModels.qwen.id
+          ? 'Qwen3.5-9B is an open-weight model with 9 billion parameters.'
+          : details.recommendation?.model?.id === studyModels.gemini.id
+            ? 'Gemini 3.1 Flash Lite is a Google model designed for low latency.' : null}</p>
+        {details.recommendation?.source !== 'ai' && details.recommendation?.threshold !== undefined && <p>Quality threshold · {details.recommendation.threshold}/100</p>}
         <ul className="study-models">{details.recommendation?.candidates?.map((model) => <li key={model.id}>
           <strong>{model.display_name}</strong><span>{model.score === null ? 'Benchmark pending' : `${model.score}/100${model.sample_count ? ` · ${model.sample_count} tasks` : ''}`}</span>
         </li>)}</ul>
