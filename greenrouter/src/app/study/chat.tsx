@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Markdown from 'react-markdown';
 import { useEffect, useRef, useState } from 'react';
 import { createAuthClient } from 'better-auth/react';
 import { studyModels } from '../../lib/study-models';
@@ -261,7 +262,9 @@ export default function Study({ signedIn }: { signedIn: boolean }) {
               {!recommendationId && <button type="button" className="study-secondary" disabled={!!pending} onClick={() => void recommend(active!, turn)}>Retry recommendation</button>}
             </div>}
             {turn.answers.map((answer, index) => <article className="study-answer" key={index}>
-              <h2>{turn.sample ? 'Offline example for' : 'Answer from'} {answer.model}</h2><p className="answer">{answer.text}</p>
+              <h2>{turn.sample ? 'Offline example for' : 'Answer from'} {answer.model}</h2><div className="study-markdown">
+                <Markdown skipHtml disallowedElements={['img']}>{answer.text}</Markdown>
+              </div>
             </article>)}
             {turn.answers.length > 0 && <div className="study-card study-water">
               <span className="study-label">On-site cooling water</span>
