@@ -6,12 +6,14 @@ const runtime = globalThis as typeof globalThis & {
   greenRoutePool?: Pool;
 };
 
-export async function query<Row extends Record<string, unknown>>(sql: string, params: unknown[]) {
+export function postgresPool() {
   const url = process.env.DATABASE_URL;
-  if (url) {
-    const pool = runtime.greenRoutePool ??= new Pool({ connectionString: url, max: 5 });
-    return (await pool.query<Row>(sql, params)).rows;
-  }
+  return url ? (runtime.greenRoutePool ??= new Pool({ connectionString: url, max: 5 })) : null;
+}
+
+export async function query<Row extends Record<string, unknown>>(sql: string, params: unknown[]) {
+  const pool = postgresPool();
+  if (pool) return (await pool.query<Row>(sql, params)).rows;
   if (process.env.NODE_ENV === 'production') throw new Error('DATABASE_URL is required in production');
   const db = runtime.greenRouteLocal ??= new PGlite('.data/postgres');
   return (await db.query<Row>(sql, params)).rows;

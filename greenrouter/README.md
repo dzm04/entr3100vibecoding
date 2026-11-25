@@ -10,8 +10,7 @@ npm run dev -- --port 3017
 
 Development uses PGlite, an embedded PostgreSQL engine. Data persists in
 `.data/postgres`. Stop the dev server before running migrations or opening
-that database from another process. The migration command records migration
-001 and can be rerun. The model ranks are provisional and benchmark and
+that database from another process. The migration command applies pending migrations and can be rerun. The model ranks are provisional and benchmark and
 water data start empty.
 
 To use a dedicated PostgreSQL 16+ database instead, set DATABASE_URL in
@@ -36,4 +35,28 @@ The recommendation endpoint sets a session cookie. Before adding public run and 
 
 Before calling OpenRouter, insert the run with its client-generated UUID. Only the request that successfully inserts the row may call OpenRouter. On conflict, check session ownership and return the current status. A retry uses a fresh UUID. Let the API check that a model is allowed and that answer ratings attach to successful runs.
 
-A feedback row with recommendation_id rates recommendation clarity. A row with run_id rates answer usefulness. Each target supports one rating, editable through an upsert. The database stores no student prompts or generated answers.
+A feedback row with recommendation_id rates recommendation clarity. A row with run_id rates answer usefulness. Each target supports one rating, editable through an upsert. Guest prompts and answers stay in browser memory. Signed-in chats store prompts and answers in PostgreSQL.
+
+## Google sign-in and saved chats
+
+Create a Web application OAuth client in Google Cloud and register
+`http://127.0.0.1:3021/api/auth/callback/google` as an authorized redirect
+URI. Use the same host and port when opening GreenRouter. If your Google
+project is in testing, add the account you will use as a test user.
+
+Add these server-only settings to `.env.local`:
+
+```dotenv
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
+GOOGLE_CLIENT_ID=your-client-id
+GOOGLE_CLIENT_SECRET=your-client-secret
+BETTER_AUTH_SECRET=your-generated-secret
+BETTER_AUTH_URL=http://127.0.0.1:3021
+```
+
+Generate the session secret with `openssl rand -hex 32`. Apply the migrations
+with `npm run db:migrate`, then run `npm run dev -- --port 3021`. Open
+`http://127.0.0.1:3021/login` and choose **Continue with Google**.
+For a hosted setup, use its HTTPS origin for `BETTER_AUTH_URL` and register
+the matching HTTPS callback in Google Cloud. The guest flow can run locally
+without OAuth credentials or a separate PostgreSQL server.
