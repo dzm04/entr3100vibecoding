@@ -5,6 +5,7 @@ import Markdown from 'react-markdown';
 import { useEffect, useRef, useState } from 'react';
 import { createAuthClient } from 'better-auth/react';
 import { studyModels } from '../../lib/study-models';
+import type { TokenUsage } from '../../lib/token-usage';
 import './study.css';
 
 const authClient = createAuthClient();
@@ -22,8 +23,9 @@ type Recommendation = {
   threshold?: number;
   source?: 'ai' | 'benchmark';
   routerUnavailable?: boolean;
+  routingUsage?: { model: string; counts: TokenUsage } | null;
 };
-type Answer = { model: string; text: string };
+type Answer = { model: string; text: string; usage?: TokenUsage };
 type Turn = {
   id: string;
   prompt: string;
@@ -62,6 +64,19 @@ async function post<T>(path: string, body: object): Promise<T> {
   const result = await response.json();
   if (!response.ok) throw new Error(result.error ?? 'The request failed. Try again.');
   return result;
+}
+
+function UsageDetails({ title, usage }: { title: string; usage?: TokenUsage }) {
+  const format = (value: number | null | undefined) => value?.toLocaleString() ?? 'Unavailable';
+  return <details className="study-usage">
+    <summary>{title}</summary>
+    <dl>
+      <dt>Input tokens</dt><dd>{format(usage?.inputTokens)}</dd>
+      <dt>Output tokens</dt><dd>{format(usage?.outputTokens)}</dd>
+      <dt>Cached input (part of input)</dt><dd>{format(usage?.cachedInputTokens)}</dd>
+      <dt>Reasoning (part of output)</dt><dd>{format(usage?.reasoningTokens)}</dd>
+    </dl>
+  </details>;
 }
 
 export default function Study({ signedIn }: { signedIn: boolean }) {
@@ -156,11 +171,11 @@ export default function Study({ signedIn }: { signedIn: boolean }) {
 
   async function run(chatId: string, turn: Turn, model: Model, recommendationId: string) {
     setPending({ turn: turn.id, label: `Waiting for ${model.display_name}…` });
-    const result = await post<{ answer: string }>('/api/run', {
+    const result = await post<{ answer: string; usage: TokenUsage }>('/api/run', {
       prompt: turn.prompt, model: model.id, recommendationId,
     });
     updateTurn(chatId, turn.id, (current) => ({
-      ...current, answers: [...current.answers, { model: model.display_name, text: result.answer }],
+      ...current, answers: [...current.answers, { model: model.display_name, text: result.answer, usage: result.usage }],
     }));
   }
 
@@ -245,6 +260,7 @@ export default function Study({ signedIn }: { signedIn: boolean }) {
               <div className="study-actions">
                 <button type="button" onClick={() => showDetails(turn)}>{rec.model ? 'Why this model?' : 'View model evidence'}</button>
               </div>
+              {rec.routingUsage && <UsageDetails title={`Routing tokens · ${rec.routingUsage.model}`} usage={rec.routingUsage.counts} />}
               {!turn.sample && recommendationId && rec.candidates.length > 0 && <details open={rec.model ? undefined : true}>
                 <summary>{rec.model ? 'Compare or run another model' : 'Available models'}</summary>
                 <ul className="study-models">{rec.candidates.map((model) => <li key={model.id}>
@@ -265,6 +281,7 @@ export default function Study({ signedIn }: { signedIn: boolean }) {
               <h2>{turn.sample ? 'Offline example for' : 'Answer from'} {answer.model}</h2><div className="study-markdown">
                 <Markdown skipHtml disallowedElements={['img']}>{answer.text}</Markdown>
               </div>
+              {!turn.sample && <UsageDetails title="Answer tokens" usage={answer.usage} />}
             </article>)}
             {turn.answers.length > 0 && <div className="study-card study-water">
               <span className="study-label">On-site cooling water</span>

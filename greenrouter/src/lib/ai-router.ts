@@ -1,4 +1,5 @@
 import 'server-only';
+import { readTokenUsage } from './token-usage';
 import { studyModels } from './study-models';
 
 export const routingModel = 'google/gemini-2.5-flash-lite';
@@ -44,7 +45,7 @@ export async function routeStudyTask(prompt: string, activity: string) {
     if (result?.choice !== 'qwen' && result?.choice !== 'gemini') return null;
     if (typeof result.reason !== 'string' || !result.reason.trim() || result.reason.length > 350) return null;
     const choice: keyof typeof studyModels = result.choice;
-    return { id: studyModels[choice].id, difficulty: choice === 'qwen' ? 'basic' : 'advanced', reason: result.reason.trim() };
+    return { id: studyModels[choice].id, difficulty: choice === 'qwen' ? 'basic' : 'advanced', reason: result.reason.trim(), usage: readTokenUsage(data.usage) };
   } catch {
     return null;
   }

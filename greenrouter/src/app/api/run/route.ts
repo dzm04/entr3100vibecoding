@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { studyModelIds } from '../../../lib/study-models';
+import { readTokenUsage } from '../../../lib/token-usage';
 import { query } from '../../../lib/db';
 
 export async function POST(request: NextRequest) {
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
     if (result?.model !== model || typeof answer !== 'string' || !answer.trim()) {
       return NextResponse.json({ error: 'OpenRouter did not return a usable answer from the selected model.' }, { status: 502 });
     }
-    return NextResponse.json({ answer });
+    return NextResponse.json({ answer, usage: readTokenUsage(result.usage) });
   } catch {
     return NextResponse.json({ error: 'The request could not be completed. Try again.' }, { status: 503 });
   }

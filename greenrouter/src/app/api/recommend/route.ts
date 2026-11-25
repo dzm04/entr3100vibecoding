@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { studyModelIds, studyModels } from '../../../lib/study-models';
-import { routeStudyTask } from '../../../lib/ai-router';
+import { routeStudyTask, routingModel } from '../../../lib/ai-router';
 import { query } from '../../../lib/db';
 
 export const runtime = 'nodejs';
@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
       model: selected ?? null,
       reason,
       source: routing && selected ? 'ai' : 'benchmark',
+      routingUsage: routing ? { model: routingModel, counts: routing.usage } : null,
       candidates,
       threshold,
       water: { status: 'unavailable_for_serving_provider' },
